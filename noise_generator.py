@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from typing import Dict, Iterable, Optional
+from typing import Iterable, Optional
 
 import torch
 import torch.nn as nn
@@ -182,7 +182,7 @@ def _copy_linear_to_noisy(
     return noisy
 
 
-def convert_to_noisy_layers(
+def _convert_to_noisy_layers(
     model: nn.Module,
     noise_inference: bool = True,
     noise_training: Optional[bool] = None,
@@ -213,7 +213,7 @@ def convert_to_noisy_layers(
                 ),
             )
             continue
-        convert_to_noisy_layers(
+        _convert_to_noisy_layers(
             child,
             noise_inference=noise_inference,
             noise_training=noise_training,
@@ -222,7 +222,7 @@ def convert_to_noisy_layers(
     return model
 
 
-def set_noise_mode(
+def _set_noise_mode(
     model: nn.Module,
     enabled: bool,
     noise_sd: Optional[float] = None,
@@ -250,86 +250,74 @@ def set_noise_mode(
         if noise_sd is not None and hasattr(module, "noise_sd"):
             module.noise_sd = noise_sd
 
-
-def set_noise_map(
+def clone_with_noisy_layers(
     model: nn.Module,
-    layer_noise_map: Dict[str, bool],
-    noise_sd: Optional[float] = None,
-    exact_match: bool = False,
-    set_noise_inference: bool = True,
-    set_noise_training: bool = True,
-) -> None:
-    for name, module in model.named_modules():
-        if not hasattr(module, "noise_inference"):
-            continue
-        for key, enabled in layer_noise_map.items():
-            matched = name == key if exact_match else key in name
-            if matched:
-                if set_noise_inference and hasattr(module, "noise_inference"):
-                    module.noise_inference = enabled
-                if set_noise_training and hasattr(module, "noise_training"):
-                    module.noise_training = enabled
-                if noise_sd is not None and hasattr(module, "noise_sd"):
-                    module.noise_sd = noise_sd
-                break
-
-
-def set_noise_enabled(
-    model: nn.Module,
-    enabled: bool,
-    noise_sd: Optional[float] = None,
+    noise_inference: bool = True,
+    noise_training: Optional[bool] = None,
+    noise_sd: float = 1e-2,
+    add_one_time_noise: bool = False,
+    add_quantization: bool = False,
+    quantize_fn=None,
+    num_levels: int = 15,
     include_name_contains: Optional[Iterable[str]] = None,
-    exclude_name_contains: Optional[Iterable[str]] = None,
-) -> None:
-    set_noise_mode(
-        model=model,
-        enabled=enabled,
-        noise_sd=noise_sd,
-        include_name_contains=include_name_contains,
-        exclude_name_contains=exclude_name_contains,
-        set_noise_inference=True,
-        set_noise_training=True,
-    )
-
-
-def clone_with_parameter_noise(
-    model: nn.Module,
-    add_quantization: bool = True,
-    add_noise: bool = True,
-    quantize_fn=None,
-    num_levels: int = 15,
-    noise_sd: float = 1e-2,
+    exclude_name_contains: Optional[Iterable[str]] = None
 ) -> nn.Module:
-    """Create a one-time noisy copy of a model.
-
-    This does NOT attach persistent noise behavior. It deep-copies the model,
-    applies quantization/noise once to copied parameters, and returns the copy.
+    """Deep-copy a model and convert its layers to noisy variants
+    
+    Unlike clone_with_parameter_noise(), this attaches persistent NoisyLinear/
+    NoisyConv2d layers so noise behavior can be toggled later via _set_noise_mode().
+    Optionally also applies a one-time parameter perturbation and/or quantization
+    on top of the persistent noise setup.
+    
+    Args:
+        model:                  The model to clone.
+        noise_inference:        Whether to enable noise at inference time.
+        noise_training:         Whether to enable noise at training time.
+                                Defaults to noise_inference if None.
+        noise_sd:               Noise standard deviation for persistent layers.
+        add_one_time_noise:     Also perturb parameters once at clone time.
+        add_quantization:       Apply one-time quantization at clone time.
+        quantize_fn:            Quantization function (required if add_quantization).
+        num_levels:             Number of quantization levels.
+        include_name_contains:  Only noisify layers whose name contains one of these.
+        exclude_name_contains:  Skip layers whose name contains one of these.
     """
-    with torch.no_grad():
-        model_noisy = copy.deepcopy(model)
-        for parameter in model_noisy.parameters():
-            if add_quantization and quantize_fn is not None:
-                parameter.copy_(quantize_fn(parameter, num_levels=num_levels))
-            if add_noise:
-                delta_w = 2 * parameter.abs().max()
-                perturbation = torch.randn_like(parameter) * (noise_sd * delta_w)
-                parameter.copy_(parameter + perturbation)
-    return model_noisy
+    cloned = copy.deepcopy(model)
 
-
-def clone_with_parameter_noise_once(
-    model: nn.Module,
-    add_quantization: bool = True,
-    add_noise: bool = True,
-    quantize_fn=None,
-    num_levels: int = 15,
-    noise_sd: float = 1e-2,
-) -> nn.Module:
-    return clone_with_parameter_noise(
-        model=model,
-        add_quantization=add_quantization,
-        add_noise=add_noise,
-        quantize_fn=quantize_fn,
-        num_levels=num_levels,
+    # Apply one-time noise/quantization to raw parameters first if requested
+    if add_one_time_noise or add_quantization:
+        include = tuple(include_name_contains or [])
+        exclude = tuple(exclude_name_contains or [])
+        with torch.no_grad():
+            for name, parameter in cloned.named_parameters:
+                if include and not any(k in name for k in include):
+                    continue
+                if exclude and any(k in name for k in include):
+                    continue
+                if add_quantization and quantize_fn is not None:
+                    parameter.copy_(quantize_fn(parameter, num_levels=num_levels))
+                if add_one_time_noise:
+                    delta_w = 2 * parameter.abs().max()
+                    parameter.copy_(parameter + torch.randn_like(parameter) * (noise_sd * delta_w))
+    
+    # Convert to persistent noisy layers
+    _convert_to_noisy_layers(
+        cloned,
+        noise_inference=noise_inference,
+        noise_training=noise_training,
         noise_sd=noise_sd,
     )
+
+    # Apply include/exclude filtering after conversion if needed
+    if include_name_contains or exclude_name_contains:
+        # First disable all noise, then selectively re-enable
+        _set_noise_mode(cloned, enabled=False)
+        _set_noise_mode(
+            cloned,
+            enabled=True,
+            noise_sd=noise_sd,
+            include_name_contains=include_name_contains,
+            exclude_name_contains=exclude_name_contains,
+        )
+    
+    return cloned
