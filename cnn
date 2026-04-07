@@ -1,0 +1,268 @@
+# Load core deep learning libraries.
+# PyTorch provides the neural network framework; torchvision provides
+# dataset utilities and image transformation tools.
+import torch
+import torch.nn as nn
+import torchvision
+import torchvision.transforms as transforms
+
+# Hyperparameters — values set before training that govern model behavior
+# and are not updated during the learning process itself.
+
+batch_size = 64       # Number of training samples processed per weight update
+num_classes = 10      # Number of output categories the model will classify
+learning_rate = 0.001 # Step size controlling how aggressively weights are updated
+num_epochs = 20       # Number of complete passes through the training dataset
+
+# Automatically target GPU if available; fall back to CPU otherwise.
+# All model tensors and data must be sent to the same device to run correctly.
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+  
+# Loading Data
+# Build a reusable transformation pipeline to preprocess all images
+# before they are fed into the model.
+all_transforms = transforms.Compose([
+    transforms.Resize((32,32)),          # Standardize all images to 32×32 pixels
+    transforms.ToTensor(),               # Convert PIL images to PyTorch tensors
+                                         # and rescale pixel values from [0,255] to [0,1]
+    transforms.Normalize(                # Shift and scale each color channel so that
+        mean=[0.4914, 0.4822, 0.4465],   # pixel values have zero mean and unit variance.
+        std=[0.2023, 0.1994, 0.2010])    # Values are the precomputed CIFAR-10 channel statistics.
+])
+
+# Download and load the CIFAR-10 training split (50,000 labeled images).
+# The transformation pipeline defined above is applied to each image on load.
+train_dataset = torchvision.datasets.CIFAR10(root = './data',
+                                             train = True,
+                                             transform = all_transforms,
+                                             download = True)
+
+# Download and load the CIFAR-10 test split (10,000 labeled images).
+# This data is held out entirely during training and used only for evaluation.
+test_dataset = torchvision.datasets.CIFAR10(root = './data',
+                                            train = False,
+                                            transform = all_transforms,
+                                            download = True)
+
+# Wrap the training dataset in a DataLoader, which handles batching and
+# shuffling automatically at each epoch. Shuffling prevents the model from
+# learning spurious patterns tied to sample order.
+train_loader = torch.utils.data.DataLoader(dataset = train_dataset,
+                                           batch_size = batch_size,
+                                           shuffle = True)
+
+# Wrap the test dataset in a DataLoader for batched evaluation.
+# Shuffling is less critical here but is retained for consistency.
+test_loader = torch.utils.data.DataLoader(dataset = test_dataset,
+                                          batch_size = batch_size,
+                                          shuffle = True)
+
+# Building a Model
+# Define the CNN architecture as a Python class inheriting from nn.Module,
+# PyTorch's base class for all neural network models.
+class ConvNeuralNet(nn.Module):
+    def __init__(self, num_classes):
+        super(ConvNeuralNet, self).__init__()
+
+        # --- Convolutional Block 1 ---
+        # First conv layer: accepts 3-channel (RGB) input, produces 32 feature maps.
+        # A 3×3 kernel slides across the image to detect low-level features
+        # such as edges and color gradients.
+        self.conv_layer1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3)
+        self.relu_1 = nn.ReLU()  # Activation: introduces non-linearity by zeroing negative values
+
+        # Second conv layer: refines the 32 feature maps from the previous layer.
+        self.conv_layer2 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=3)
+        self.relu_2 = nn.ReLU()
+
+        # Max pooling: reduces spatial dimensions by half, retaining only the
+        # strongest activations within each 2×2 region. Reduces computation
+        # and builds translational invariance.
+        self.max_pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # --- Convolutional Block 2 ---
+        # Third conv layer: doubles the number of feature maps to 64, allowing
+        # the network to detect more complex, higher-level features.
+        self.conv_layer3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3)
+        self.relu_3 = nn.ReLU()
+
+        # Fourth conv layer: continues refining the 64 feature maps.
+        self.conv_layer4 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3)
+        self.relu_4 = nn.ReLU()
+
+        # Second max pooling layer: further reduces spatial dimensions.
+        self.max_pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # --- Fully Connected Layers ---
+        # Flatten the 64 feature maps (now 5×5) into a single vector of 1600
+        # values, then map through two linear layers to produce class scores.
+        self.fc1 = nn.Linear(1600, 128)  # Compress 1600 features down to 128
+        self.relu_5 = nn.ReLU()
+        self.fc2 = nn.Linear(128, num_classes)  # Final layer: one output per class
+
+    def forward(self, x):
+        # --- Forward Pass ---
+        # Data flows through each layer in sequence. PyTorch builds a
+        # computation graph as it goes, which is used later for backpropagation.
+
+        # Convolutional block 1: extract low-level features
+        out = self.conv_layer1(x)
+        out = self.relu_1(out)
+        out = self.conv_layer2(out)
+        out = self.relu_2(out)
+        out = self.max_pool1(out)      # Spatial dims: 32×32 → 14×14
+
+        # Convolutional block 2: extract higher-level features
+        out = self.conv_layer3(out)
+        out = self.relu_3(out)
+        out = self.conv_layer4(out)
+        out = self.relu_4(out)
+        out = self.max_pool2(out)      # Spatial dims: 14×14 → 5×5
+
+        # Flatten: convert 3D feature volume (64 × 5 × 5) to 1D vector (1600,)
+        # out.size(0) preserves the batch dimension; -1 infers the rest.
+        out = out.reshape(out.size(0), -1)
+
+        # Fully connected layers: map learned features to class predictions
+        out = self.fc1(out)
+        out = self.relu_5(out)
+        out = self.fc2(out)            # Output: raw scores (logits) for each class
+
+        return out
+
+# Training
+# Instantiate the model and move it to the target device (GPU or CPU).
+# All model parameters must reside on the same device as the input data.
+model = ConvNeuralNet(num_classes)
+model.to(device)
+
+# Loss function: Cross-Entropy Loss is standard for multi-class classification.
+# It measures the difference between the model's predicted class probabilities
+# and the true labels, returning a single scalar value to minimize.
+criterion = nn.CrossEntropyLoss()
+
+# Optimizer: Stochastic Gradient Descent (SGD) updates model weights by
+# computing gradients on one batch at a time rather than the full dataset.
+#   lr           — learning rate: controls the size of each weight update
+#   weight_decay — L2 regularization: penalizes large weights to reduce overfitting
+#   momentum     — accumulates gradient history to accelerate convergence
+#                  and dampen oscillations
+optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate,
+                            weight_decay=0.005, momentum=0.9)
+
+# Total number of batches per epoch — used for progress tracking.
+total_step = len(train_loader)
+
+# Outer loop: one full pass through the training data per epoch.
+for epoch in range(num_epochs):
+
+    # Inner loop: iterate over the dataset in batches.
+    # enumerate() provides a batch index (i) alongside each (images, labels) pair.
+    for i, (images, labels) in enumerate(train_loader):
+
+        # Move the current batch to the same device as the model.
+        images = images.to(device)
+        labels = labels.to(device)
+
+        # --- Forward Pass ---
+        # Pass the batch through the network to produce predicted class scores (logits).
+        outputs = model(images)
+
+        # Compute the loss: compare predictions against the ground-truth labels.
+        loss = criterion(outputs, labels)
+
+        # --- Backward Pass and Weight Update ---
+        # Clear gradients from the previous batch. PyTorch accumulates gradients
+        # by default; failing to zero them would corrupt the current update.
+        optimizer.zero_grad()
+
+        # Backpropagation: compute the gradient of the loss with respect to
+        # every trainable parameter in the network.
+        loss.backward()
+
+        # Apply the computed gradients to update the model weights.
+        optimizer.step()
+
+    # Report training loss at the end of each epoch.
+    # Note: this reflects the loss on the final batch only, not the full epoch.
+    print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, loss.item()))
+
+from tqdm import tqdm  # Progress bar utility for tracking evaluation across batches
+
+# Disable gradient computation for evaluation. During inference the model is
+# not learning, so gradients are unnecessary. Disabling them reduces memory
+# usage and speeds up computation.
+with torch.no_grad():
+
+    correct = 0  # Running count of correctly classified images
+    total = 0    # Running count of total images evaluated
+
+    # Iterate over the test set in batches.
+    # tqdm wraps the loader to display a live progress bar.
+    for images, labels in tqdm(test_loader, desc="Evaluating"):
+
+        # Move the current batch to the same device as the model.
+        images = images.to(device)
+        labels = labels.to(device)
+
+        # Forward pass: generate predicted class scores for the batch.
+        outputs = model(images)
+
+        # Extract the predicted class for each image.
+        # torch.max returns both the maximum value and its index along dimension 1
+        # (the class dimension). The index corresponds to the predicted class label.
+        # The underscore discards the maximum value, which is not needed here.
+        _, predicted = torch.max(outputs.data, 1)
+
+        # Accumulate the total number of images evaluated this batch.
+        total += labels.size(0)
+
+        # Count correct predictions by comparing predicted labels to ground truth.
+        # The comparison produces a boolean tensor; .sum() counts the True values;
+        # .item() converts the resulting tensor to a plain Python integer.
+        correct += (predicted == labels).sum().item()
+
+    # Report final accuracy across the full test set.
+    print('Accuracy of the network on the {} test images: {} %'.format(
+        total, 100 * correct / total))
+
+# Results
+from tqdm import tqdm  # Progress bar utility for tracking evaluation across batches
+
+# Disable gradient computation for evaluation. During inference the model is
+# not learning, so gradients are unnecessary. Disabling them reduces memory
+# usage and speeds up computation.
+with torch.no_grad():
+
+    correct = 0  # Running count of correctly classified images
+    total = 0    # Running count of total images evaluated
+
+    # Iterate over the test set in batches.
+    # tqdm wraps the loader to display a live progress bar.
+    for images, labels in tqdm(test_loader, desc="Evaluating"):
+
+        # Move the current batch to the same device as the model.
+        images = images.to(device)
+        labels = labels.to(device)
+
+        # Forward pass: generate predicted class scores for the batch.
+        outputs = model(images)
+
+        # Extract the predicted class for each image.
+        # torch.max returns both the maximum value and its index along dimension 1
+        # (the class dimension). The index corresponds to the predicted class label.
+        # The underscore discards the maximum value, which is not needed here.
+        _, predicted = torch.max(outputs.data, 1)
+
+        # Accumulate the total number of images evaluated this batch.
+        total += labels.size(0)
+
+        # Count correct predictions by comparing predicted labels to ground truth.
+        # The comparison produces a boolean tensor; .sum() counts the True values;
+        # .item() converts the resulting tensor to a plain Python integer.
+        correct += (predicted == labels).sum().item()
+
+    # Report final accuracy across the full test set.
+    print('Accuracy of the network on the {} test images: {} %'.format(
+        total, 100 * correct / total))
