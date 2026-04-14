@@ -289,13 +289,13 @@ def clone_with_noisy_layers(
         include = tuple(include_name_contains or [])
         exclude = tuple(exclude_name_contains or [])
         with torch.no_grad():
-            for name, parameter in cloned.named_parameters:
+            for name, parameter in cloned.named_parameters():
                 if include and not any(k in name for k in include):
                     continue
                 if exclude and any(k in name for k in include):
                     continue
                 if add_quantization and quantize_fn is not None:
-                    parameter.copy_(quantize_fn(parameter, num_levels=num_levels))
+                    parameter.copy_(quantize_fn(parameter, num_levels))
                 if add_one_time_noise:
                     delta_w = 2 * parameter.abs().max()
                     parameter.copy_(parameter + torch.randn_like(parameter) * (noise_sd * delta_w))
