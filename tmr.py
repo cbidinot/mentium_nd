@@ -4,27 +4,40 @@ import torch
 import torch.nn as nn
 import noise_generator as noise
 from torch.utils.data import DataLoader
+from typing import Iterable, Optional
 
 
-def run_with_tmr(model: nn.Model, test_loader: DataLoader, device: torch.device):
+class TMRNoiseConfig: 
+    def __init__(self, noise_sd: float, add_one_time_noise: bool = False, add_quantization: bool = False, quantize_fn: callable = None, num_levels: int = 16,
+                 include_name_contains: Optional[Iterable[str]] = None, exclude_name_contains: Optional[Iterable[str]] = None):
+        self.noise_sd1 = noise_sd
+        self.noise_sd2 = noise_sd
+        self.noise_sd3 = noise_sd
+        self.add_one_time_noise = add_one_time_noise
+        self.add_quantization = add_quantization
+        self.quantize_fn = quantize_fn
+        self.num_levels = num_levels
+        self.include_name_contains = include_name_contains
+        self.exclude_name_contains = exclude_name_contains
+
+
+def run_with_tmr(model: nn.Model, test_loader: DataLoader, device: torch.device, noise_config: TMRNoiseConfig) -> Dict[str, float]:
     """
     Run the model with TMR (Triple Modular Redundancy) enabled.
 
     Args:
         model (nn.Module): The PyTorch model to run with TMR.
+        test_loader (DataLoader): The DataLoader for the test dataset.
+        device (torch.device): The device to run the models on (e.g., 'cuda' or 'cpu').
+        noise_config (TMRNoiseConfig): Configuration for the noise to apply to the TMR clones.
 
     Returns:
-        (float, float, float, float, float): A tuple containing:
-            - TMR Accuracy: The accuracy of the TMR output compared to the labels.
-            - Original Test Loss: The average loss of the original model on the test set.
-            - Original Accuracy: The accuracy of the original model on the test set.
-            - TMR vs Original Diff: The percentage of test samples where the TMR output differs from the original model's output.
-            - TMR Fails (No Consensus): The percentage of test samples where TMR failed to reach a consensus (i.e., all three harts produced different outputs).
+        Dict[str, float]: A dictionary containing the TMR accuracy, original test loss, original accuracy, TMR vs original difference, and TMR fails due to no consensus.
     """
     # Instantiate three noisy clones of the model for TMR
-    hart1 = noise.clone_with_noisy_layers(model, noise_sd=0.1)
-    hart2 = noise.clone_with_noisy_layers(model, noise_sd=0.2)
-    hart3 = noise.clone_with_noisy_layers(model, noise_sd=0.1)
+    hart1 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd1, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, num_levels=noise_config.num_levels, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
+    hart2 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd2, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, num_levels=noise_config.num_levels, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
+    hart3 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd3, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, num_levels=noise_config.num_levels, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
 
     # Move all models to the specified device
     hart1.to(device)
@@ -78,12 +91,8 @@ def run_with_tmr(model: nn.Model, test_loader: DataLoader, device: torch.device)
     correct /= len(test_loader.dataset)
     tmr_diff /= len(test_loader.dataset)
     tmr_fails /= len(test_loader.dataset)
-    print(f"TMR Accuracy: {tmr_correct:.4f}")
-    print(f"Original Test Loss: {test_loss:.4f}, Original Accuracy: {correct:.4f}")
-    print(f"TMR vs Original Diff: {tmr_diff:.4f}, TMR Fails (No Consensus): {tmr_fails:.4f}")
     
-    return (tmr_correct, test_loss, correct, tmr_diff, tmr_fails)
-    
+    return {"tmr_accuracy": tmr_correct, "original_test_loss": test_loss, "original_accuracy": correct, "tmr_diff": tmr_diff, "tmr_fails": tmr_fails}
 
 
     
