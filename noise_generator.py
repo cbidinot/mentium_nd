@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 from typing import Iterable, Optional
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 
@@ -131,6 +133,54 @@ class NoisyConv2d(nn.Conv2d):
             f"noise_training={self.noise_training}, noise_sd={self.noise_sd}"
         )
 
+def quantize_tensor(
+    parameters: torch.Tensor,
+    levels: Optional[torch.Tensor] = None,
+    num_levels: int = 15,
+    quantile: float = 0.01,
+    device: str | torch.device = "cpu",
+) -> torch.Tensor:
+    """Quantize a tensor by snapping each value to the nearest discrete level.
+
+    Quantization levels are either provided explicitly or derived automatically
+    from the tensor's own distribution, clipping outliers via quantiles before
+    computing evenly-spaced levels across the remaining range.
+
+    Args:
+        parameters: The tensor to quantize.
+        levels:     Explicit quantization levels to use. If None, levels are
+                    computed automatically from the tensor using ``num_levels``
+                    and ``quantile``.
+        num_levels: Number of evenly-spaced quantization levels to generate
+                    when ``levels`` is None. Ignored if ``levels`` is provided.
+        quantile:   Fraction of values to clip from each tail of the 
+                    distribution before computing levels. For example, 0.01
+                    clips the bottom 1% and top 1%, making levels robust to 
+                    outliers. Must be in [0, 0.5].
+        device:     Device to place the levels and bins tensors on. Should
+                    match the device of ``parameters``.
+
+    Returns:
+        A tensor of the same shape as ``parameters`` where each value has been
+        replaced by the nearest quantization level.
+
+    Example:
+        >>> x = torch.randn(100)
+        >>> q = quantize_tensor(x, num_levels=7)
+        >>> len(q.unique()) <= 7
+        True
+    """
+    if levels is None:
+        upper_w = torch.quantile(parameters, np.clip(1 - quantile, 0, 1)).item()
+        lower_w = torch.quantile(parameters, np.clip(quantile, 0, 1)).item()
+        levels = torch.linspace(lower_w, upper_w, num_levels).to(device)
+
+    bins = torch.tensor(
+        [levels[i] + (levels[i] - levels[i + 1]).abs() / 2 for i in range(num_levels - 1)],
+        device=device,
+    )
+    idx = torch.bucketize(parameters, boundaries=bins)
+    return levels[idx]
 
 def _copy_conv2d_to_noisy(
     module: nn.Conv2d,
