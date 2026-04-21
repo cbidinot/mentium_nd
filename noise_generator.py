@@ -389,17 +389,17 @@ def clone_with_noisy_layers(
     add_one_time_noise: bool = False,
     add_quantization: bool = False,
     quantize_fn=None,
-    num_levels: int = 15,
+    quantize_kwargs: Optional[dict] = None,
     include_name_contains: Optional[Iterable[str]] = None,
-    exclude_name_contains: Optional[Iterable[str]] = None
+    exclude_name_contains: Optional[Iterable[str]] = None,
 ) -> nn.Module:
-    """Deep-copy a model and convert its layers to noisy variants
-    
+    """Deep-copy a model and convert its layers to noisy variants.
+
     Unlike clone_with_parameter_noise(), this attaches persistent NoisyLinear/
-    NoisyConv2d layers so noise behavior can be toggled later via _set_noise_mode().
+    NoisyConv2d layers so noise behavior can be toggled later via set_noise_mode().
     Optionally also applies a one-time parameter perturbation and/or quantization
     on top of the persistent noise setup.
-    
+
     Args:
         model:                  The model to clone.
         noise_inference:        Whether to enable noise at inference time.
@@ -408,30 +408,49 @@ def clone_with_noisy_layers(
         noise_sd:               Noise standard deviation for persistent layers.
         add_one_time_noise:     Also perturb parameters once at clone time.
         add_quantization:       Apply one-time quantization at clone time.
-        quantize_fn:            Quantization function (required if add_quantization).
-        num_levels:             Number of quantization levels.
+        quantize_fn:            Quantization function to apply if add_quantization
+                                is True. Compatible with quantize_tensor,
+                                quantize_symmetric, quantize_stochastic, and
+                                quantize_log. If None, no quantization is applied.
+        quantize_kwargs:        Keyword arguments forwarded to quantize_fn.
+                                For example, ``{"num_levels": 15}`` for
+                                quantize_tensor or ``{"num_bits": 8}`` for
+                                quantize_symmetric/stochastic/log. If None,
+                                the quantize_fn defaults are used.
         include_name_contains:  Only noisify layers whose name contains one of these.
         exclude_name_contains:  Skip layers whose name contains one of these.
+
+    Returns:
+        A deep copy of the model with noisy layers and optional one-time
+        quantization/noise applied.
+
+    Example:
+        >>> # Using quantize_tensor (original)
+        >>> noisy = clone_with_noisy_layers(model, add_quantization=True,
+        ...     quantize_fn=quantize_tensor, quantize_kwargs={"num_levels": 15})
+
+        >>> # Using quantize_symmetric
+        >>> noisy = clone_with_noisy_layers(model, add_quantization=True,
+        ...     quantize_fn=quantize_symmetric, quantize_kwargs={"num_bits": 8})
     """
     cloned = copy.deepcopy(model)
+    quantize_kwargs = quantize_kwargs or {}
 
-    # Apply one-time noise/quantization to raw parameters first if requested
     if add_one_time_noise or add_quantization:
         include = tuple(include_name_contains or [])
         exclude = tuple(exclude_name_contains or [])
         with torch.no_grad():
-            for name, parameter in cloned.named_parameters:
+            for name, parameter in cloned.named_parameters():
                 if include and not any(k in name for k in include):
                     continue
-                if exclude and any(k in name for k in include):
+                if exclude and any(k in name for k in exclude):
                     continue
                 if add_quantization and quantize_fn is not None:
-                    parameter.copy_(quantize_fn(parameter, num_levels=num_levels))
+                    parameter.copy_(quantize_fn(parameter, **quantize_kwargs))
                 if add_one_time_noise:
                     delta_w = 2 * parameter.abs().max()
                     parameter.copy_(parameter + torch.randn_like(parameter) * (noise_sd * delta_w))
-    
-    # Convert to persistent noisy layers
+
     _convert_to_noisy_layers(
         cloned,
         noise_inference=noise_inference,
@@ -439,9 +458,7 @@ def clone_with_noisy_layers(
         noise_sd=noise_sd,
     )
 
-    # Apply include/exclude filtering after conversion if needed
     if include_name_contains or exclude_name_contains:
-        # First disable all noise, then selectively re-enable
         _set_noise_mode(cloned, enabled=False)
         _set_noise_mode(
             cloned,
@@ -450,5 +467,5 @@ def clone_with_noisy_layers(
             include_name_contains=include_name_contains,
             exclude_name_contains=exclude_name_contains,
         )
-    
+
     return cloned
