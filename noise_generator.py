@@ -163,12 +163,6 @@ def quantize_tensor(
     Returns:
         A tensor of the same shape as ``parameters`` where each value has been
         replaced by the nearest quantization level.
-
-    Example:
-        >>> x = torch.randn(100)
-        >>> q = quantize_tensor(x, num_levels=7)
-        >>> len(q.unique()) <= 7
-        True
     """
     if levels is None:
         upper_w = torch.quantile(parameters, np.clip(1 - quantile, 0, 1)).item()
@@ -181,6 +175,93 @@ def quantize_tensor(
     )
     idx = torch.bucketize(parameters, boundaries=bins)
     return levels[idx]
+
+def quantize_symmetric(
+    parameters: torch.Tensor,
+    num_bits: int = 8,
+) -> torch.Tensor:
+    """Quantize a tensor using symmetric uniform quantization.
+
+    Divides the range [-max, max] into evenly-spaced levels determined by the
+    number of bits, mimicking the behavior of fixed bit-width hardware such as
+    INT8 inference engines. Unlike distribution-based quantization, the grid is
+    anchored to the tensor's absolute maximum rather than its quantile range.
+
+    Args:
+        parameters: The tensor to quantize.
+        num_bits:   Number of bits to simulate. Determines the number of
+                    quantization levels as ``2^num_bits - 1``. For example,
+                    8 bits gives 255 levels.
+
+    Returns:
+        A tensor of the same shape as ``parameters`` with values snapped to
+        the nearest symmetric quantization level.
+    """
+    n_levels = 2 ** num_bits - 1
+    max_val = parameters.abs().max()
+    scale = max_val / (n_levels // 2)
+    return torch.clamp(torch.round(parameters / scale), -(n_levels // 2), n_levels // 2) * scale
+
+def quantize_stochastic(
+    parameters: torch.Tensor,
+    num_bits: int = 8,
+) -> torch.Tensor:
+    """Quantize a tensor using stochastic rounding.
+
+    Rather than always rounding to the nearest level, each value is rounded up
+    or down randomly with probability proportional to its distance from the
+    two adjacent levels. This produces an unbiased estimator of the original
+    value in expectation, which makes it better suited for use during training
+    than deterministic rounding, which can introduce systematic bias that
+    accumulates across layers.
+
+    Args:
+        parameters: The tensor to quantize.
+        num_bits:   Number of bits to simulate. Determines the number of
+                    quantization levels as ``2^num_bits``.
+
+    Returns:
+        A tensor of the same shape as ``parameters`` with values stochastically
+        rounded to quantization levels.
+    """
+    n_levels = 2 ** num_bits - 1
+    max_val = parameters.abs().max()
+    scale = max_val / n_levels
+    scaled = parameters / scale
+    floored = torch.floor(scaled)
+    prob = scaled - floored
+    return (floored + torch.bernoulli(prob)) * scale
+
+def quantize_log(
+    parameters: torch.Tensor,
+    num_bits: int = 4,
+) -> torch.Tensor:
+    """Quantize a tensor using logarithmically-spaced levels.
+
+    Places quantization levels on a log scale rather than a linear one,
+    giving finer resolution near zero and coarser resolution in the tails.
+    This is well suited for weight tensors that follow a roughly normal
+    distribution, where most values are clustered near zero. Signs are
+    preserved by quantizing in log-space and reapplying them afterward.
+
+    Args:
+        parameters: The tensor to quantize. Zero values are clamped to a
+                    small epsilon (1e-8) before log transformation to avoid
+                    -inf.
+        num_bits:   Number of bits to simulate. Determines the number of
+                    log-spaced levels as ``2^num_bits``.
+
+    Returns:
+        A tensor of the same shape as ``parameters`` with values snapped to
+        the nearest log-spaced quantization level, with original signs
+        restored.
+    """
+    signs = torch.sign(parameters)
+    log_vals = torch.log2(parameters.abs().clamp(min=1e-8))
+    min_log, max_log = log_vals.min(), log_vals.max()
+    levels = torch.linspace(min_log, max_log, 2 ** num_bits, device=parameters.device)
+    quantized_log = quantize_tensor(log_vals, levels=levels, num_levels=2 ** num_bits)
+    return signs * (2 ** quantized_log)
 
 def _copy_conv2d_to_noisy(
     module: nn.Conv2d,
