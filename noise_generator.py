@@ -381,6 +381,30 @@ def _set_noise_mode(
         if noise_sd is not None and hasattr(module, "noise_sd"):
             module.noise_sd = noise_sd
 
+def clone_with_parameter_noise(
+    model: nn.Module,
+    add_quantization: bool = True,
+    add_noise: bool = True,
+    quantize_fn=None,
+    num_levels: int = 15,
+    noise_sd: float = 1e-2,
+) -> nn.Module:
+    """Create a one-time noisy copy of a model.
+
+    This does NOT attach persistent noise behavior. It deep-copies the model,
+    applies quantization/noise once to copied parameters, and returns the copy.
+    """
+    with torch.no_grad():
+        model_noisy = copy.deepcopy(model)
+        for parameter in model_noisy.parameters():
+            if add_quantization and quantize_fn is not None:
+                parameter.copy_(quantize_fn(parameter, num_levels=num_levels))
+            if add_noise:
+                delta_w = 2 * parameter.abs().max()
+                perturbation = torch.randn_like(parameter) * (noise_sd * delta_w)
+                parameter.copy_(parameter + perturbation)
+    return model_noisy
+
 def clone_with_noisy_layers(
     model: nn.Module,
     noise_inference: bool = True,
@@ -423,15 +447,6 @@ def clone_with_noisy_layers(
     Returns:
         A deep copy of the model with noisy layers and optional one-time
         quantization/noise applied.
-
-    Example:
-        >>> # Using quantize_tensor (original)
-        >>> noisy = clone_with_noisy_layers(model, add_quantization=True,
-        ...     quantize_fn=quantize_tensor, quantize_kwargs={"num_levels": 15})
-
-        >>> # Using quantize_symmetric
-        >>> noisy = clone_with_noisy_layers(model, add_quantization=True,
-        ...     quantize_fn=quantize_symmetric, quantize_kwargs={"num_bits": 8})
     """
     cloned = copy.deepcopy(model)
     quantize_kwargs = quantize_kwargs or {}
