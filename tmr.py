@@ -8,15 +8,17 @@ from typing import Iterable, Optional
 
 
 class TMRNoiseConfig: 
-    def __init__(self, noise_sd: float, add_one_time_noise: bool = False, add_quantization: bool = False, quantize_fn: callable = None, num_levels: int = 16,
-                 include_name_contains: Optional[Iterable[str]] = None, exclude_name_contains: Optional[Iterable[str]] = None):
+    def __init__(self, noise_sd: float, noise_inference : bool = True, noise_training: bool = False, add_one_time_noise: bool = False, add_quantization: bool = False, quantize_fn: callable = None, quantize_kwargs = None,
+        include_name_contains: Optional[Iterable[str]] = None, exclude_name_contains: Optional[Iterable[str]] = None):
         self.noise_sd1 = noise_sd
         self.noise_sd2 = noise_sd
         self.noise_sd3 = noise_sd
+        self.noise_training = noise_training
+        self.noise_inference = noise_inference
         self.add_one_time_noise = add_one_time_noise
         self.add_quantization = add_quantization
         self.quantize_fn = quantize_fn
-        self.num_levels = num_levels
+        self.quantize_kwargs = quantize_kwargs
         self.include_name_contains = include_name_contains
         self.exclude_name_contains = exclude_name_contains
 
@@ -35,9 +37,9 @@ def run_with_tmr(model: nn.Model, test_loader: DataLoader, device: torch.device,
         Dict[str, float]: A dictionary containing the TMR accuracy, original test loss, original accuracy, TMR vs original difference, and TMR fails due to no consensus.
     """
     # Instantiate three noisy clones of the model for TMR
-    hart1 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd1, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, num_levels=noise_config.num_levels, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
-    hart2 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd2, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, num_levels=noise_config.num_levels, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
-    hart3 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd3, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, num_levels=noise_config.num_levels, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
+    hart1 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd1, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
+    hart2 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd2, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
+    hart3 = noise.clone_with_noisy_layers(model, noise_sd=noise_config.noise_sd3, add_one_time_noise=noise_config.add_one_time_noise, add_quantization=noise_config.add_quantization, quantize_fn=noise_config.quantize_fn, include_name_contains=noise_config.include_name_contains, exclude_name_contains=noise_config.exclude_name_contains)
 
     # Move all models to the specified device
     hart1.to(device)

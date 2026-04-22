@@ -1,0 +1,11 @@
+{
+    "noise_sd": 1e-2,
+    "noise_inference": true,
+    "noise_training": false,
+    "add_one_time_noise": false,
+    "add_quantizaiton": false,
+    "quantize_fn": null,
+    "quantize_kwargs": null,
+    "include_name_contains": null,
+    "exclude_name_contains": null
+}

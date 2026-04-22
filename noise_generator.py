@@ -461,11 +461,7 @@ def clone_with_noisy_layers(
                 if exclude and any(k in name for k in exclude):
                     continue
                 if add_quantization and quantize_fn is not None:
-<<<<<<< HEAD
                     parameter.copy_(quantize_fn(parameter, num_levels))
-=======
-                    parameter.copy_(quantize_fn(parameter, **quantize_kwargs))
->>>>>>> main
                 if add_one_time_noise:
                     delta_w = 2 * parameter.abs().max()
                     parameter.copy_(parameter + torch.randn_like(parameter) * (noise_sd * delta_w))
