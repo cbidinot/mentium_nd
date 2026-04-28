@@ -4,6 +4,18 @@ import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
 
+# For Visualizations
+def plot_value_array(i, predictions_array, true_label):
+  true_label = true_label[i]
+  plt.grid(False)
+  plt.xticks(range(10))
+  plt.yticks([])
+  thisplot = plt.bar(range(10), predictions_array, color="#777777")
+  plt.ylim([0, 1])
+  predicted_label = np.argmax(predictions_array)
+
+  thisplot[predicted_label].set_color('red')
+  thisplot[true_label].set_color('blue')
 
 # Define relevant variables (called hyperparameters) for the ML task
 batch_size = 64
@@ -113,7 +125,7 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
 
-    # RUn on validation
+    # Run on validation
 
     print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, loss.item()))
 
@@ -130,3 +142,48 @@ with torch.no_grad():
         correct += (predicted == labels).sum().item()
 
     print('Accuracy of the network on the {} test images: {} %'.format(50000, 100 * correct / total))
+
+# Visualizations
+# The code shown below is taken from TensorFlow.
+# The original code utilized TensorFlow, and our team converted this to be compatible with PyTorch
+# Output figure without noise, and figure with noise for comparison
+
+probability_model = nn.Sequential(model, nn.Softmax(dim=1))
+predictions = probability_model.predict(test_dataset)
+
+def plot_image(i, predictions_array, true_label, img):
+  true_label, img = true_label[i], img[i]
+  plt.grid(False)
+  plt.xticks([])
+  plt.yticks([])
+
+  plt.imshow(img, cmap=plt.cm.binary)
+
+  predicted_label = np.argmax(predictions_array)
+  if predicted_label == true_label:
+    color = 'blue'
+  else:
+    color = 'red'
+
+  plt.xlabel("{} {:2.0f}% ({})".format(class_names[predicted_label],
+                                100*np.max(predictions_array),
+                                class_names[true_label]),
+                                color=color)
+
+# Testing Dataset
+check = 0
+plt.figure(figsize=(6,3))
+plt.subplot(1,2,1)
+plot_image(check, predictions[check], test_dataset)
+plt.subplot(1,2,2)
+plot_value_array(check, predictions[check],  test_dataset)
+plt.show()
+
+# Training Dataset
+check = 0
+plt.figure(figsize=(6,3))
+plt.subplot(1,2,1)
+plot_image(check, predictions[check], train_dataset)
+plt.subplot(1,2,2)
+plot_value_array(check, predictions[check],  train_dataset)
+plt.show()
