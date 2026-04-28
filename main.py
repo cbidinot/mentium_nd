@@ -45,7 +45,7 @@ def main():
 
     device = get_device()
     model_map = {"mlp": MLP, "cnn": ConvNeuralNet}
-    model = model_map[args.model].to(device)
+    model = model_map[args.model]().to(device)
 
     train_loader, test_loader = data.get_dataloaders(args.task, train_batch_size=args.batch_size, test_batch_size=args.batch_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -54,7 +54,7 @@ def main():
    
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
-    if args.cfg["noise_training"]:
+    if cfg["noise_training"]:
         # add noise but not one time noise
         model = lone_with_noisy_layers(model, one_time_noise_sd=0.0, layer_noise_sd=config.noise_sd1, add_one_time_noise=config.add_one_time_noise, add_quantization=config.add_quantization, quantize_fn=config.quantize_fn, include_name_contains=config.include_name_contains, exclude_name_contains=config.exclude_name_contains)
     
