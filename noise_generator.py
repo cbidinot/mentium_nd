@@ -133,7 +133,7 @@ class NoisyConv2d(nn.Conv2d):
             f"noise_training={self.noise_training}, noise_sd={self.noise_sd}"
         )
 
-def quantize_tensor(
+def quantize_quantile(
     parameters: torch.Tensor,
     levels: Optional[torch.Tensor] = None,
     num_levels: int = 15,
@@ -405,6 +405,8 @@ def clone_with_parameter_noise(
                 parameter.copy_(parameter + perturbation)
     return model_noisy
 
+quant_fn_map = {"quantile": quantize_quantile, "symmetric": quantize_symmetric, "stochastic": quantize_stochastic, "log": quantize_log}
+
 def clone_with_noisy_layers(
     model: nn.Module,
     noise_inference: bool = True,
@@ -432,7 +434,7 @@ def clone_with_noisy_layers(
         noise_sd:               Noise standard deviation for persistent layers.
         add_one_time_noise:     Also perturb parameters once at clone time.
         add_quantization:       Apply one-time quantization at clone time.
-        quantize_fn:            Quantization function to apply if add_quantization
+        quantize_fn:            Quantization function name to apply if add_quantization
                                 is True. Compatible with quantize_tensor,
                                 quantize_symmetric, quantize_stochastic, and
                                 quantize_log. If None, no quantization is applied.
@@ -461,7 +463,11 @@ def clone_with_noisy_layers(
                 if exclude and any(k in name for k in exclude):
                     continue
                 if add_quantization and quantize_fn is not None:
-                    parameter.copy_(quantize_fn(parameter, **quantize_kwargs))
+                    try:
+                        parameter.copy_(quanquantize_fn(parameter, num_levels))
+                    except KeyError as err:
+                        print("Error while loading quantization function. Make sure to use one of the supported functions and the right arguments.")
+                        raise err
                 if add_one_time_noise:
                     delta_w = 2 * parameter.abs().max()
                     parameter.copy_(parameter + torch.randn_like(parameter) * (noise_sd * delta_w))
