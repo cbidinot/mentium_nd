@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torchvision
 import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
+import numpy as np
 
 # For Visualizations
 def plot_value_array(i, predictions_array, true_label):
@@ -17,11 +19,30 @@ def plot_value_array(i, predictions_array, true_label):
   thisplot[predicted_label].set_color('red')
   thisplot[true_label].set_color('blue')
 
+def plot_image(i, predictions_array, true_label, img):
+  true_label, img = true_label[i], img[i]
+  plt.grid(False)
+  plt.xticks([])
+  plt.yticks([])
+
+  plt.imshow(img, cmap=plt.cm.binary)
+
+  predicted_label = np.argmax(predictions_array)
+  if predicted_label == true_label:
+    color = 'blue'
+  else:
+    color = 'red'
+
+  plt.xlabel("{} {:2.0f}% ({})".format(class_names[predicted_label],
+                                100*np.max(predictions_array),
+                                class_names[true_label]),
+                                color=color)
+
 # Define relevant variables (called hyperparameters) for the ML task
 batch_size = 64
 num_classes = 10
 learning_rate = 0.001
-num_epochs = 50
+num_epochs = 5
 
 # Device will determine whether to run the training on GPU or CPU.
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -148,42 +169,42 @@ with torch.no_grad():
 # The original code utilized TensorFlow, and our team converted this to be compatible with PyTorch
 # Output figure without noise, and figure with noise for comparison
 
-probability_model = nn.Sequential(model, nn.Softmax(dim=1))
-predictions = probability_model.predict(test_dataset)
-
-def plot_image(i, predictions_array, true_label, img):
-  true_label, img = true_label[i], img[i]
-  plt.grid(False)
-  plt.xticks([])
-  plt.yticks([])
-
-  plt.imshow(img, cmap=plt.cm.binary)
-
-  predicted_label = np.argmax(predictions_array)
-  if predicted_label == true_label:
-    color = 'blue'
-  else:
-    color = 'red'
-
-  plt.xlabel("{} {:2.0f}% ({})".format(class_names[predicted_label],
-                                100*np.max(predictions_array),
-                                class_names[true_label]),
-                                color=color)
+class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
 # Testing Dataset
-check = 0
+image, label = test_dataset[0]
+image = image.unsqueeze(0)
+
+model.eval()
+with torch.no_grad():
+    logits = model(image) # pass test data
+    prediction = torch.argmax(logits, dim=1)
+
+print(f"Predicted Class ID: {prediction.item()}")
+print(f"Actual Class ID: {label}")
+
 plt.figure(figsize=(6,3))
 plt.subplot(1,2,1)
-plot_image(check, predictions[check], test_dataset)
+plot_image(image, prediction, test_dataset)
 plt.subplot(1,2,2)
-plot_value_array(check, predictions[check],  test_dataset)
+plot_value_array(image, prediction,  test_dataset)
 plt.show()
 
 # Training Dataset
-check = 0
+image, label = train_dataset[0]
+image = image.unsqueeze(0)
+
+model.eval()
+with torch.no_grad():
+    logits = model(image) # pass test data
+    prediction = torch.argmax(logits, dim=1)
+
+print(f"Predicted Class ID: {prediction.item()}")
+print(f"Actual Class ID: {label}")
+
 plt.figure(figsize=(6,3))
 plt.subplot(1,2,1)
-plot_image(check, predictions[check], train_dataset)
+plot_image(image, prediction, train_dataset)
 plt.subplot(1,2,2)
-plot_value_array(check, predictions[check],  train_dataset)
+plot_value_array(image, prediction,  train_dataset)
 plt.show()
