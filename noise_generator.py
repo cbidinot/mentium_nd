@@ -133,12 +133,12 @@ class NoisyConv2d(nn.Conv2d):
             f"noise_training={self.noise_training}, noise_sd={self.noise_sd}"
         )
 
-def quantize_tensor(
+def quantize_quantile(
     parameters: torch.Tensor,
     levels: Optional[torch.Tensor] = None,
     num_levels: int = 15,
     quantile: float = 0.01,
-    device: str | torch.device = "cpu",
+    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor by snapping each value to the nearest discrete level.
 
@@ -164,10 +164,11 @@ def quantize_tensor(
         A tensor of the same shape as ``parameters`` where each value has been
         replaced by the nearest quantization level.
     """
+    device = device or parameters.device
     if levels is None:
         upper_w = torch.quantile(parameters, np.clip(1 - quantile, 0, 1)).item()
         lower_w = torch.quantile(parameters, np.clip(quantile, 0, 1)).item()
-        levels = torch.linspace(lower_w, upper_w, num_levels).to(device)
+        levels = torch.linspace(lower_w, upper_w, num_levels, device=device)
 
     bins = torch.tensor(
         [levels[i] + (levels[i] - levels[i + 1]).abs() / 2 for i in range(num_levels - 1)],
@@ -179,6 +180,7 @@ def quantize_tensor(
 def quantize_symmetric(
     parameters: torch.Tensor,
     num_bits: int = 8,
+    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor using symmetric uniform quantization.
 
@@ -197,6 +199,7 @@ def quantize_symmetric(
         A tensor of the same shape as ``parameters`` with values snapped to
         the nearest symmetric quantization level.
     """
+    device = device or parameters.device
     n_levels = 2 ** num_bits - 1
     max_val = parameters.abs().max()
     scale = max_val / (n_levels // 2)
@@ -205,6 +208,7 @@ def quantize_symmetric(
 def quantize_stochastic(
     parameters: torch.Tensor,
     num_bits: int = 8,
+    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor using stochastic rounding.
 
@@ -224,17 +228,19 @@ def quantize_stochastic(
         A tensor of the same shape as ``parameters`` with values stochastically
         rounded to quantization levels.
     """
+    device = device or parameters.device
     n_levels = 2 ** num_bits - 1
     max_val = parameters.abs().max()
-    scale = max_val / n_levels
+    scale = (max_val / n_levels).to(device)
     scaled = parameters / scale
     floored = torch.floor(scaled)
-    prob = scaled - floored
+    prob = (scaled - floored).to(device)
     return (floored + torch.bernoulli(prob)) * scale
 
 def quantize_log(
     parameters: torch.Tensor,
     num_bits: int = 4,
+    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor using logarithmically-spaced levels.
 
@@ -256,11 +262,12 @@ def quantize_log(
         the nearest log-spaced quantization level, with original signs
         restored.
     """
+    device = device or parameters.device
     signs = torch.sign(parameters)
     log_vals = torch.log2(parameters.abs().clamp(min=1e-8))
     min_log, max_log = log_vals.min(), log_vals.max()
-    levels = torch.linspace(min_log, max_log, 2 ** num_bits, device=parameters.device)
-    quantized_log = quantize_tensor(log_vals, levels=levels, num_levels=2 ** num_bits)
+    levels = torch.linspace(min_log, max_log, 2 ** num_bits, device=device)
+    quantized_log = quantize_quantile(log_vals, levels=levels, num_levels=2 ** num_bits, device=device)
     return signs * (2 ** quantized_log)
 
 def _copy_conv2d_to_noisy(
@@ -289,7 +296,6 @@ def _copy_conv2d_to_noisy(
     if module.bias is not None:
         noisy.bias.data.copy_(module.bias.data)
     return noisy
-
 
 def _copy_linear_to_noisy(
     module: nn.Linear,
@@ -405,11 +411,14 @@ def clone_with_parameter_noise(
                 parameter.copy_(parameter + perturbation)
     return model_noisy
 
+quant_fn_map = {"quantile": quantize_quantile, "symmetric": quantize_symmetric, "stochastic": quantize_stochastic, "log": quantize_log}
+
 def clone_with_noisy_layers(
     model: nn.Module,
     noise_inference: bool = True,
     noise_training: Optional[bool] = None,
-    noise_sd: float = 1e-2,
+    one_time_noise_sd: float = 1e-2,
+    layer_noise_sd: float = 1e-2,
     add_one_time_noise: bool = False,
     add_quantization: bool = False,
     quantize_fn=None,
@@ -432,7 +441,7 @@ def clone_with_noisy_layers(
         noise_sd:               Noise standard deviation for persistent layers.
         add_one_time_noise:     Also perturb parameters once at clone time.
         add_quantization:       Apply one-time quantization at clone time.
-        quantize_fn:            Quantization function to apply if add_quantization
+        quantize_fn:            Quantization function name to apply if add_quantization
                                 is True. Compatible with quantize_tensor,
                                 quantize_symmetric, quantize_stochastic, and
                                 quantize_log. If None, no quantization is applied.
@@ -461,16 +470,20 @@ def clone_with_noisy_layers(
                 if exclude and any(k in name for k in exclude):
                     continue
                 if add_quantization and quantize_fn is not None:
-                    parameter.copy_(quantize_fn(parameter, **quantize_kwargs))
+                    try:
+                        parameter.copy_(quantize_fn(parameter, **quantize_kwargs))
+                    except KeyError as err:
+                        print("Error while loading quantization function. Make sure to use one of the supported functions and the right arguments.")
+                        raise err
                 if add_one_time_noise:
                     delta_w = 2 * parameter.abs().max()
-                    parameter.copy_(parameter + torch.randn_like(parameter) * (noise_sd * delta_w))
+                    parameter.copy_(parameter + torch.randn_like(parameter) * (one_time_noise_sd * delta_w))
 
     _convert_to_noisy_layers(
         cloned,
         noise_inference=noise_inference,
         noise_training=noise_training,
-        noise_sd=noise_sd,
+        noise_sd=layer_noise_sd,
     )
 
     if include_name_contains or exclude_name_contains:
@@ -478,7 +491,7 @@ def clone_with_noisy_layers(
         _set_noise_mode(
             cloned,
             enabled=True,
-            noise_sd=noise_sd,
+            noise_sd=layer_noise_sd,
             include_name_contains=include_name_contains,
             exclude_name_contains=exclude_name_contains,
         )
