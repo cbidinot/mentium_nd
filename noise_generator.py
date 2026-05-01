@@ -261,7 +261,7 @@ def quantize_log(
     log_vals = torch.log2(parameters.abs().clamp(min=1e-8))
     min_log, max_log = log_vals.min(), log_vals.max()
     levels = torch.linspace(min_log, max_log, 2 ** num_bits, device=device)
-    quantized_log = quantize_quantile(log_vals, levels=levels, num_levels=2 ** num_bits, device=device)
+    quantized_log = quantize_quantile(log_vals, levels=levels, num_levels=2 ** num_bits)
     return signs * (2 ** quantized_log)
 
 def _copy_conv2d_to_noisy(
@@ -465,7 +465,7 @@ def clone_with_noisy_layers(
                     continue
                 if add_quantization and quantize_fn is not None:
                     try:
-                        parameter.copy_(quantize_fn(parameter, **quantize_kwargs))
+                        parameter.copy_(quant_fn_map[quantize_fn](parameter, **quantize_kwargs))
                     except KeyError as err:
                         print("Error while loading quantization function. Make sure to use one of the supported functions and the right arguments.")
                         raise err
