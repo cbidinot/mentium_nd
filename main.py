@@ -56,7 +56,7 @@ def main():
 
     if cfg["noise_training"]:
         # add noise but not one time noise
-        model = lone_with_noisy_layers(model, one_time_noise_sd=0.0, layer_noise_sd=config.noise_sd1, add_one_time_noise=config.add_one_time_noise, add_quantization=config.add_quantization, quantize_fn=config.quantize_fn, include_name_contains=config.include_name_contains, exclude_name_contains=config.exclude_name_contains)
+        model = clone_with_noisy_layers(model, one_time_noise_sd=0.0, layer_noise_sd=config.noise_sd1, add_one_time_noise=config.add_one_time_noise, add_quantization=config.add_quantization, quantize_fn=config.quantize_fn, include_name_contains=config.include_name_contains, exclude_name_contains=config.exclude_name_contains)
     
     model.train()
     print("Starting training...")
