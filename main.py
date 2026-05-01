@@ -65,18 +65,20 @@ def main():
         # add noise but not one time noise
         model = clone_with_noisy_layers(model, one_time_noise_sd=0.0, layer_noise_sd=config.noise_sd1, add_one_time_noise=config.add_one_time_noise, add_quantization=config.add_quantization, quantize_fn=config.quantize_fn, include_name_contains=config.include_name_contains, exclude_name_contains=config.exclude_name_contains)
     
-    model.train()
-    print("Starting training...")
+    # model.train()
+    # print("Starting training...")
 
     for epoch in range(args.epochs):
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
             loss = criterion(model(inputs), labels)
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
     
-    print("Finished training, now running with TMR...")
+        # print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, args.epochs, loss.item()))
+    
+    # print("Finished training, now running with TMR...")
     results = run_with_tmr(model, test_loader, device, config)
 
     print(f"TMR Accuracy: {results["tmr_accuracy"]:.4f}")
