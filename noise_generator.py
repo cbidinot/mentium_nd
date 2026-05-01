@@ -465,8 +465,8 @@ def clone_with_noisy_layers(
                     continue
                 if add_quantization and quantize_fn is not None:
                     try:
-                        parameter.copy_(quant_fn_map[quantize_fn](parameter, **quantize_kwargs))
-                    except KeyError as err:
+                        parameter.copy_(quant_fn_map[quantize_fn](parameter, device=parameter.device, **quantize_kwargs))
+                    except (KeyError, TypeError) as err:
                         print("Error while loading quantization function. Make sure to use one of the supported functions and the right arguments.")
                         raise err
                 if add_one_time_noise:

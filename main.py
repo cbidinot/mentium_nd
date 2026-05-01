@@ -8,7 +8,7 @@ import torch.nn as nn
 from torchvision import datasets, transforms
 from tmr import run_with_tmr, TMRNoiseConfig
 from mlp import MLP
-from noise_generator import clone_with_noisy_layers
+from noise_generator import clone_with_noisy_layers, quant_fn_map
 from cnn import ConvNeuralNet
 
 def get_device() -> torch.device:
@@ -36,9 +36,15 @@ def main():
     with open(args.noisecfg, "r") as f:
         cfg = json.load(f)
 
+    quantize_fn_resolved = None
+    if cfg.get("quantize_fn") is not None:
+        quantize_fn_resolved = quant_fn_map.get(cfg["quantize_fn"])
+        if quantize_fn_resolved is None:
+            raise ValueError(f"Unknown quantize_fn '{cfg['quantize_fn']}'. Choose from: {list(quant_fn_map.keys())}")
+
     try:
         config = TMRNoiseConfig(one_time_sd=cfg["one_time_sd"], noise_sd=cfg["noise_sd"], noise_inference=cfg["noise_inference"], noise_training=cfg["noise_training"],
-        add_one_time_noise=cfg["add_one_time_noise"], add_quantization=cfg["add_quantization"], quantize_fn=cfg["quantize_fn"], 
+        add_one_time_noise=cfg["add_one_time_noise"], add_quantization=cfg["add_quantization"], quantize_fn=quantize_fn_resolved, quantize_kwargs=cfg["quantize_kwargs"],
         include_name_contains=cfg["include_name_contains"], exclude_name_contains=cfg["exclude_name_contains"])
     except KeyError as err:
         print("Failed to parse config file. Make sure to follow the pattern and inlcude every option.")
