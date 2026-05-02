@@ -8,7 +8,7 @@ import torch.nn as nn
 from torchvision import datasets, transforms
 from tmr import run_with_tmr, TMRNoiseConfig
 from mlp import MLP
-from noise_generator import clone_with_noisy_layers
+from noise_generator import clone_with_noisy_layers, quant_fn_map
 from cnn import ConvNeuralNet
 
 def get_device() -> torch.device:
@@ -36,9 +36,15 @@ def main():
     with open(args.noisecfg, "r") as f:
         cfg = json.load(f)
 
+    quantize_fn_resolved = None
+    if cfg.get("quantize_fn") is not None:
+        quantize_fn_resolved = quant_fn_map.get(cfg["quantize_fn"])
+        if quantize_fn_resolved is None:
+            raise ValueError(f"Unknown quantize_fn '{cfg['quantize_fn']}'. Choose from: {list(quant_fn_map.keys())}")
+
     try:
         config = TMRNoiseConfig(one_time_sd=cfg["one_time_sd"], noise_sd=cfg["noise_sd"], noise_inference=cfg["noise_inference"], noise_training=cfg["noise_training"],
-        add_one_time_noise=cfg["add_one_time_noise"], add_quantization=cfg["add_quantization"], quantize_fn=cfg["quantize_fn"], 
+        add_one_time_noise=cfg["add_one_time_noise"], add_quantization=cfg["add_quantization"], quantize_fn=quantize_fn_resolved, quantize_kwargs=cfg["quantize_kwargs"],
         include_name_contains=cfg["include_name_contains"], exclude_name_contains=cfg["exclude_name_contains"])
     except KeyError as err:
         print("Failed to parse config file. Make sure to follow the pattern and inlcude every option.")
@@ -46,7 +52,7 @@ def main():
 
     device = get_device()
     model_map = {"mlp": MLP, "cnn": ConvNeuralNet}
-    model = model_map[args.model].to(device)
+    model = model_map[args.model]().to(device)
 
     train_loader, test_loader = data.get_dataloaders(args.task, train_batch_size=args.batch_size, test_batch_size=args.batch_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -55,22 +61,24 @@ def main():
    
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
-    if args.cfg["noise_training"]:
+    if cfg["noise_training"]:
         # add noise but not one time noise
         model = clone_with_noisy_layers(model, one_time_noise_sd=0.0, layer_noise_sd=config.noise_sd1, add_one_time_noise=config.add_one_time_noise, add_quantization=config.add_quantization, quantize_fn=config.quantize_fn, include_name_contains=config.include_name_contains, exclude_name_contains=config.exclude_name_contains)
     
-    model.train()
-    print("Starting training...")
+    # model.train()
+    # print("Starting training...")
 
     for epoch in range(args.epochs):
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
-            optimizer.zero_grad()
             loss = criterion(model(inputs), labels)
+            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
     
-    print("Finished training, now running with TMR...")
+        # print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, args.epochs, loss.item()))
+    
+    # print("Finished training, now running with TMR...")
     results = run_with_tmr(model, test_loader, device, config)
 
     print(f"TMR Accuracy: {results["tmr_accuracy"]:.4f}")

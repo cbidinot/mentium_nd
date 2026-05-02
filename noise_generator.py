@@ -138,7 +138,6 @@ def quantize_quantile(
     levels: Optional[torch.Tensor] = None,
     num_levels: int = 15,
     quantile: float = 0.01,
-    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor by snapping each value to the nearest discrete level.
 
@@ -157,14 +156,12 @@ def quantize_quantile(
                     distribution before computing levels. For example, 0.01
                     clips the bottom 1% and top 1%, making levels robust to 
                     outliers. Must be in [0, 0.5].
-        device:     Device to place the levels and bins tensors on. Should
-                    match the device of ``parameters``.
 
     Returns:
         A tensor of the same shape as ``parameters`` where each value has been
         replaced by the nearest quantization level.
     """
-    device = device or parameters.device
+    device = parameters.device
     if levels is None:
         upper_w = torch.quantile(parameters, np.clip(1 - quantile, 0, 1)).item()
         lower_w = torch.quantile(parameters, np.clip(quantile, 0, 1)).item()
@@ -180,7 +177,6 @@ def quantize_quantile(
 def quantize_symmetric(
     parameters: torch.Tensor,
     num_bits: int = 8,
-    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor using symmetric uniform quantization.
 
@@ -199,7 +195,7 @@ def quantize_symmetric(
         A tensor of the same shape as ``parameters`` with values snapped to
         the nearest symmetric quantization level.
     """
-    device = device or parameters.device
+    device = parameters.device
     n_levels = 2 ** num_bits - 1
     max_val = parameters.abs().max()
     scale = max_val / (n_levels // 2)
@@ -208,7 +204,6 @@ def quantize_symmetric(
 def quantize_stochastic(
     parameters: torch.Tensor,
     num_bits: int = 8,
-    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor using stochastic rounding.
 
@@ -228,7 +223,7 @@ def quantize_stochastic(
         A tensor of the same shape as ``parameters`` with values stochastically
         rounded to quantization levels.
     """
-    device = device or parameters.device
+    device = parameters.device
     n_levels = 2 ** num_bits - 1
     max_val = parameters.abs().max()
     scale = (max_val / n_levels).to(device)
@@ -240,7 +235,6 @@ def quantize_stochastic(
 def quantize_log(
     parameters: torch.Tensor,
     num_bits: int = 4,
-    device: str | torch.device | None = None,
 ) -> torch.Tensor:
     """Quantize a tensor using logarithmically-spaced levels.
 
@@ -262,12 +256,12 @@ def quantize_log(
         the nearest log-spaced quantization level, with original signs
         restored.
     """
-    device = device or parameters.device
+    device = parameters.device
     signs = torch.sign(parameters)
     log_vals = torch.log2(parameters.abs().clamp(min=1e-8))
     min_log, max_log = log_vals.min(), log_vals.max()
     levels = torch.linspace(min_log, max_log, 2 ** num_bits, device=device)
-    quantized_log = quantize_quantile(log_vals, levels=levels, num_levels=2 ** num_bits, device=device)
+    quantized_log = quantize_quantile(log_vals, levels=levels, num_levels=2 ** num_bits)
     return signs * (2 ** quantized_log)
 
 def _copy_conv2d_to_noisy(
@@ -471,8 +465,8 @@ def clone_with_noisy_layers(
                     continue
                 if add_quantization and quantize_fn is not None:
                     try:
-                        parameter.copy_(quantize_fn(parameter, **quantize_kwargs))
-                    except KeyError as err:
+                        parameter.copy_(quant_fn_map[quantize_fn](parameter, device=parameter.device, **quantize_kwargs))
+                    except (KeyError, TypeError) as err:
                         print("Error while loading quantization function. Make sure to use one of the supported functions and the right arguments.")
                         raise err
                 if add_one_time_noise:
