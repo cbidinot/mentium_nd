@@ -25,7 +25,10 @@ def plot_image(i, predictions_array, true_label, img, class_names):
   plt.xticks([])
   plt.yticks([])
 
-  plt.imshow(img, cmap=plt.cm.binary)
+  img_to_show = np.transpose(img, (1, 2, 0))
+  img_to_show = np.clip(img_to_show, 0, 1)
+  
+  plt.imshow(img_to_show, cmap=plt.cm.binary)
 
   predicted_label = np.argmax(predictions_array)
   if predicted_label == true_label:
