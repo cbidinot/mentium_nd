@@ -80,74 +80,7 @@ class ConvNeuralNet(nn.Module):
             out = self.fc2(out)
             return out
   
-def cnn(device):
-    # Define relevant variables (called hyperparameters) for the ML task
-    batch_size = 64
-    num_classes = 10
-    learning_rate = 0.001
-    num_epochs = 50
-
-    # Use transforms.compose method to reformat images for modeling,
-    # and save to variable all_transforms for later use
-    all_transforms = transforms.Compose([transforms.Resize((32,32)),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                                            std=[0.2023, 0.1994, 0.2010])
-                                        ])
-    # Create Training dataset
-    train_dataset = torchvision.datasets.CIFAR10(root = './data',
-                                                train = True,
-                                                transform = all_transforms,
-                                                download = True)
-
-    # Create Testing dataset
-    test_dataset = torchvision.datasets.CIFAR10(root = './data',
-                                                train = False,
-                                                transform = all_transforms,
-                                                download=True)
-
-    # Instantiate loader objects to facilitate processing
-    train_loader = torch.utils.data.DataLoader(dataset = train_dataset,
-                                            batch_size = batch_size,
-                                            shuffle = True)
-
-
-    test_loader = torch.utils.data.DataLoader(dataset = test_dataset,
-                                            batch_size = batch_size,
-                                            shuffle = True)
-
-    
-    model = ConvNeuralNet(num_classes)
-    model.to(device)
-
-    # Set Loss function with criterion
-    criterion = nn.CrossEntropyLoss()
-
-    # Set optimizer with optimizer
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay = 0.005, momentum = 0.9)
-
-    total_step = len(train_loader)
-
-    # We use the pre-defined number of epochs to determine how many iterations to train the network on
-    for epoch in range(num_epochs):
-    # Load in the data in batches using the train_loader object
-        for i, (images, labels) in enumerate(train_loader):
-            # Move tensors to the configured device
-            images = images.to(device)
-            labels = labels.to(device)
-
-            # Forward pass
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-
-            # Backward and optimize
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        # Run on validation
-
-        print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, loss.item()))
+def cnn(device, test_loader, model, test_dataset, train_dataset, class_names):
 
     from tqdm import tqdm
     with torch.no_grad():
@@ -161,14 +94,10 @@ def cnn(device):
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-        print('Accuracy of the network on the {} test images: {} %'.format(50000, 100 * correct / total))
-
     # Visualizations
     # The code shown below is taken from TensorFlow.
     # The original code utilized TensorFlow, and our team converted this to be compatible with PyTorch
     # Output figure without noise, and figure with noise for comparison
-
-    class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
     # Testing Dataset
     image, label = test_dataset[0]
