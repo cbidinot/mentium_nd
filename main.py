@@ -8,7 +8,7 @@ import torch.nn as nn
 from torchvision import datasets, transforms
 from tmr import run_with_tmr, TMRNoiseConfig
 from noise_generator import clone_with_noisy_layers, quant_fn_map
-from cnn
+import cnn
 
 import os
 import json
