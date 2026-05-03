@@ -1,5 +1,6 @@
 #!/bin/python3
 
+%matplotlib inline
 import torch
 import argparse
 import data
