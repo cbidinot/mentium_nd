@@ -63,3 +63,21 @@ Implements all noise and quantization functionality. Provides `NoisyLinear` and 
 | `quantize_kwargs` | object or null | Arguments forwarded to the quantization function |
 | `include_name_contains` | list or null | Only apply noise/quantization to layers whose name contains one of these strings |
 | `exclude_name_contains` | list or null | Skip layers whose name contains one of these strings |
+
+### tmr.py
+ 
+Implements the TMR evaluation logic. Contains two components: `TMRNoiseConfig`, a configuration class for noise settings, and `run_with_tmr`, the main function that runs the TMR simulation.
+ 
+#### How TMR is Simulated
+ 
+`run_with_tmr` takes a trained model and creates three independent noisy clones of it using `clone_with_noisy_layers` from `noise_generator.py`. These clones represent three redundant hardware units (harts), each affected by independent noise. For every batch in the test set, all three clones produce predictions independently. Majority voting is then applied — if at least two of the three clones agree on a prediction, that prediction is used as the TMR output. If all three disagree and no consensus is reached, the sample is marked as `-1` and excluded from the accuracy calculation rather than counted as an error. The original unmodified model is also evaluated on the same batches in parallel for comparison.
+ 
+#### Output
+ 
+| Field | Description |
+|-------|-------------|
+| `tmr_accuracy` | Accuracy of the majority vote, computed only over samples where consensus was reached |
+| `original_accuracy` | Accuracy of the unmodified base model |
+| `original_test_loss` | Cross-entropy loss of the unmodified base model |
+| `tmr_diff` | Fraction of samples where the TMR output differs from the base model |
+| `tmr_fails` | Fraction of samples where all three clones disagreed and no consensus was reached |
