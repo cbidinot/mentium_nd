@@ -101,7 +101,7 @@ def main():
         raise err
 
     device = get_device()
-    model_map = {"cnn": ConvNeuralNet}
+    model_map = {"cnn": cnn.ConvNeuralNet}
     num_classes = len(class_names)
     model = model_map[args.model](num_classes=num_classes).to(device)
 
