@@ -105,6 +105,7 @@ def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_name
 
     model.eval()
     with torch.no_grad():
+        image = image.to(device)
         logits = model(image) # pass test data
         prediction = torch.argmax(logits, dim=1)
 
