@@ -122,8 +122,10 @@ def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_name
   
     plt.subplot(1,2,2)
     plot_value_array(0, logits.cpu().numpy()[0],  [label])
-    plt.draw()
-    plt.show()
+    plt.tight_layout()
+    plt.savefig('test_prediction.png') # Save to file
+    plt.close() # Close to free memory
+    display(Image('test_prediction.png'))
 
     # Training Dataset
     image, label = train_dataset[0]
@@ -144,5 +146,7 @@ def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_name
   
     plt.subplot(1,2,2)
     plot_value_array(0, logits.cpu().numpy()[0], [label])
-    plt.draw() 
-    plt.show()
+    plt.tight_layout()
+    plt.savefig('train_prediction.png')
+    plt.close()
+    display(Image('train_prediction.png'))
