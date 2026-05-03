@@ -24,7 +24,7 @@ def main():
         description="TMR simulator for neural networks"
     )
 
-    parser.add_argument("--task", choices=["mnist", "cifar10", "cifar100"], default="mnist")
+    parser.add_argument("--task", choices=["cifar10", "cifar100"], default="cifar10")
     parser.add_argument("--model", choices=["cnn"], default="cnn")
     parser.add_argument("-c", "--noisecfg", required=True)
     parser.add_argument("--batch_size", type=int, default=32)
@@ -33,9 +33,7 @@ def main():
 
     args = parser.parse_args()
     
-    if args.task == "mnist":
-        class_names = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-    elif args.task ==  "cifar10":
+    if args.task ==  "cifar10":
         class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
     else: # cifar100
         class_names = [
