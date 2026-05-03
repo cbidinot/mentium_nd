@@ -19,6 +19,33 @@ To run with default settings, simply execute `main.py` as an executable using `d
 ```bash
 ./main.py -c ./defaultcfg.json
 ```
+### Changing the Noise Configuration
+Every setting related to noise generation can be configured through the noise configuration JSON file. These are the options available to tweak in the JSON file, and they must all be present at all times for parsing to work.
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `one_time_sd` | `float` | `1e-2` | Std dev of one-time noise injected into weights at initialization (simulates permanent hardware faults) |
+| `noise_sd` | `float` | `1e-2` | Std dev of noise injected per forward pass  |
+| `noise_inference` | `bool` | `true` | Whether to inject noise during inference |
+| `noise_training` | `bool` | `false` | Whether to inject noise during training |
+| `add_one_time_noise` | `bool` | `false` | Whether to apply one-time permanent noise to weights at startup |
+| `add_quantization` | `bool` | `false` | Whether to apply quantization as an additional fault model |
+| `quantize_fn` | `str \| null` | `null` | Name of the quantization function to use (if `add_quantization` is `true`) |
+| `quantize_kwargs` | `dict \| null` | `null` | Keyword arguments passed to `quantize_fn` |
+| `include_name_contains` | `list \| null` | `null` | Include layers whose names are on the list (by default every layer is included)
+| `exclude_name_contains` | `list \| null` | `null` | Skip noise injection for layers whose names are on the list |
+
+These are the available options and expected arguments for the quantization function. If no arguments are provided through `quantize_kwargs`, default values will be used.
+| Function | Argument | Type | Default | Description |
+|----------|----------|------|---------|-------------|
+| `quantile` | | | | Quantizes by snapping values to levels derived from the tensor's own distribution, clipping outliers first |
+| | `num_levels` | `int` | `15` | Number of evenly-spaced quantization levels to generate |
+| | `quantile` | `float` | `0.01` | Fraction of values clipped from each tail before computing levels (e.g. `0.01` clips bottom and top 1%) |
+| `symmetric` | | | | Symmetric uniform quantization anchored to the tensor's absolute max, mimicking fixed bit-width hardware (e.g. INT8) |
+| | `num_bits` | `int` | `8` | Number of bits to simulate; determines `2^num_bits - 1` quantization levels |
+| `stochastic` | | | | Like symmetric quantization but rounds up/down randomly, producing an unbiased estimator — better suited for training |
+| | `num_bits` | `int` | `8` | Number of bits to simulate; determines `2^num_bits` quantization levels |
+| `log` | | | | Quantizes on a log scale, giving finer resolution near zero; well suited for normally-distributed weights |
+| | `num_bits` | `int` | `4` | Number of bits to simulate; determines `2^num_bits` log-spaced levels |
 ## Contents
 ### noise_generator.py
 
@@ -36,14 +63,3 @@ Implements all noise and quantization functionality. Provides `NoisyLinear` and 
 | `quantize_kwargs` | object or null | Arguments forwarded to the quantization function |
 | `include_name_contains` | list or null | Only apply noise/quantization to layers whose name contains one of these strings |
 | `exclude_name_contains` | list or null | Skip layers whose name contains one of these strings |
-
-
-The `quantize_fn` can take in one of the following quantization functions:
-
-| Value | Description | `quantize_kwargs` |
-|-------|-------------|-------------------|
-| `"quantile"` | Clips outliers by quantile then snaps to evenly-spaced levels | `{"num_levels": 15, "quantile": 0.01}` |
-| `"symmetric"` | Symmetric uniform quantization anchored to the tensor's absolute max | `{"num_bits": 8}` |
-| `"stochastic"` | Stochastic rounding — rounds up or down randomly, unbiased in expectation | `{"num_bits": 8}` |
-| `"log"` | Logarithmically-spaced levels, finer resolution near zero | `{"num_bits": 4}` |
-
