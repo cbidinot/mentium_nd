@@ -31,9 +31,11 @@ def main():
     parser.add_argument("--learning_rate", type=float, default=1e-3)
     parser.add_argument("--epochs", type=int, default=5)
 
-    if model == "mnist":
+    args = parser.parse_args()
+    
+    if args.task == "mnist":
         class_names = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-    elif model ==  "cifar10":
+    elif args.task ==  "cifar10":
         class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
     else: # cifar100
         class_names = [
@@ -52,7 +54,6 @@ def main():
     'tank', 'telephone', 'television', 'tiger', 'tractor', 'train', 'trout', 
     'tulip', 'turtle', 'wardrobe', 'whale', 'willow_tree', 'wolf', 'woman', 'worm' ]
  
-    args = parser.parse_args()
     with open(args.noisecfg, "r") as f:
         cfg = json.load(f)
 
