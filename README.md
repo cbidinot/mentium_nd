@@ -81,3 +81,37 @@ Implements the TMR evaluation logic. Contains two components: `TMRNoiseConfig`, 
 | `original_test_loss` | Cross-entropy loss of the unmodified base model |
 | `tmr_diff` | Fraction of samples where the TMR output differs from the base model |
 | `tmr_fails` | Fraction of samples where all three clones disagreed and no consensus was reached |
+
+### cnn.py
+ 
+Contains the CNN model definition, visualization helpers, and the evaluation function used to assess model performance and display predictions.
+ 
+#### ConvNeuralNet
+ 
+A four-layer convolutional neural network for image classification. Takes `num_classes` as an argument, making it compatible with `cifar10` (10 classes) and `cifar100` (100 classes). The architecture is as follows:
+ 
+- **Block 1:** Two conv layers (3→32 channels, kernel size 3) each followed by ReLU, then max pooling
+- **Block 2:** Two conv layers (32→64 channels, kernel size 3) each followed by ReLU, then max pooling
+- **Fully connected:** 1600→128 with ReLU, then 128→`num_classes`
+#### cnnmodel
+ 
+Evaluates the trained model on the test set and produces visualizations of its predictions. Takes the device, test loader, model, test dataset, train dataset, and class names as arguments. After evaluating accuracy on the full test set, it samples one image from both the test and training datasets and displays two side-by-side plots for each:
+ 
+- The image itself, labeled with the predicted class, confidence percentage, and true class. The label is shown in blue if the prediction is correct, red if incorrect.
+- A bar chart of the model's confidence across all classes, with the predicted class highlighted in red and the true class in blue.
+Note: the visualization code is adapted from TensorFlow and converted to be compatible with PyTorch.
+ 
+#### Visualization Functions
+ 
+| Function | Description |
+|----------|-------------|
+| `plot_image` | Displays an image with its predicted and true class labels |
+| `plot_value_array` | Displays a bar chart of model confidence across all classes |
+ 
+### data.py
+ 
+Taken from Mentium's repository.
+
+### main.py
+
+Entry point for the simulator. Parses command line arguments, loads the noise config, instantiates the model, runs the training loop, and calls `run_with_tmr` to evaluate the trained model under TMR. Supports `cifar10` and `cifar100` tasks with the `cnn` model.
