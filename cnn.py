@@ -80,7 +80,7 @@ class ConvNeuralNet(nn.Module):
             out = self.fc2(out)
             return out
   
-def cnn(device, test_loader, model, test_dataset, train_dataset, class_names):
+def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_names):
 
     from tqdm import tqdm
     with torch.no_grad():
