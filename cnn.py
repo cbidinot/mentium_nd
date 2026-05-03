@@ -121,6 +121,7 @@ def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_name
   
     plt.subplot(1,2,2)
     plot_value_array(0, logits.cpu().numpy()[0],  [label])
+    plt.draw()
     plt.show()
 
     # Training Dataset
@@ -142,4 +143,5 @@ def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_name
   
     plt.subplot(1,2,2)
     plot_value_array(0, logits.cpu().numpy()[0], [label])
+    plt.draw() 
     plt.show()
