@@ -114,9 +114,10 @@ def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_name
 
     plt.figure(figsize=(6,3))
     plt.subplot(1,2,1)
-    plot_image(image, prediction, test_dataset, class_names)
+    plot_image(0, logits.cpu().numpy(), [label], image.cpu().numpy(), class_names)
+  
     plt.subplot(1,2,2)
-    plot_value_array(image, prediction,  test_dataset)
+    plot_value_array(0, logits.cpu().numpy()[0],  [label])
     plt.show()
 
     # Training Dataset
@@ -134,7 +135,8 @@ def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_name
 
     plt.figure(figsize=(6,3))
     plt.subplot(1,2,1)
-    plot_image(image, prediction, train_dataset)
+    plot_image(0, logits.cpu().numpy(), [label], image.cpu().numpy(), class_names)
+  
     plt.subplot(1,2,2)
-    plot_value_array(image, prediction,  train_dataset)
+    plot_value_array(0, logits.cpu().numpy()[0], [label])
     plt.show()
