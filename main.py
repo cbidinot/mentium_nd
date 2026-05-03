@@ -73,7 +73,8 @@ def main():
 
     device = get_device()
     model_map = {"cnn": ConvNeuralNet}
-    model = model_map[args.model]().to(device)
+    num_classes = len(class_names)
+    model = model_map[args.model](num_classes=num_classes).to(device)
 
     train_loader, test_loader = data.get_dataloaders(args.task, train_batch_size=args.batch_size, test_batch_size=args.batch_size)
     optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay = 0.005, momentum = 0.9)
