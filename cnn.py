@@ -5,6 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
+from IPython.display import display, Image
 
 # For Visualizations
 def plot_value_array(i, predictions_array, true_label):
