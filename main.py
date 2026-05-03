@@ -10,6 +10,37 @@ from tmr import run_with_tmr, TMRNoiseConfig
 from noise_generator import clone_with_noisy_layers, quant_fn_map
 from cnn import ConvNeuralNet
 
+import os
+import json
+
+def setup_and_download():
+    # 1. Provide your credentials here
+    config = {"username":"parisviviano","key":"e3280219f24b1faa39ddec9262ade4d1"}
+
+    # 2. Create the config file in the location the API expects
+    kaggle_path = os.path.expanduser("~/.kaggle")
+    os.makedirs(kaggle_path, exist_ok=True)
+    
+    with open(os.path.join(kaggle_path, "kaggle.json"), "w") as f:
+        json.dump(config, f)
+    
+    # 3. Set strict file permissions (Kaggle API requirement)
+    os.chmod(os.path.join(kaggle_path, "kaggle.json"), 0o600)
+
+    # 4. Install and Run Download
+    os.system("pip install -q kaggle")
+    
+    # The slug comes from the URL: xusaiai/cifar-10-pythontargz
+    dataset_slug = "xusaiai/cifar-10-pythontargz"
+    download_dir = "./data" # Change this to match your main script's data_root
+    
+    print(f"Downloading {dataset_slug}...")
+    os.system(f"kaggle datasets download -d {dataset_slug} -p {download_dir} --unzip")
+    print(f"Extraction complete. Check the '{download_dir}' folder.")
+
+if __name__ == "__main__":
+    setup_and_download()
+
 def get_device() -> torch.device:
     if torch.cuda.is_available():
         print(f"Using GPU: {torch.cuda.get_device_name(0)}")
