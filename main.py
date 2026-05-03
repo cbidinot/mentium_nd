@@ -7,9 +7,39 @@ import json
 import torch.nn as nn
 from torchvision import datasets, transforms
 from tmr import run_with_tmr, TMRNoiseConfig
-from mlp import MLP
 from noise_generator import clone_with_noisy_layers, quant_fn_map
-from cnn import ConvNeuralNet
+import cnn
+
+import os
+import json
+
+def setup_and_download():
+    # 1. Provide your credentials here
+    config = {"username":"parisviviano","key":"e3280219f24b1faa39ddec9262ade4d1"}
+
+    # 2. Create the config file in the location the API expects
+    kaggle_path = os.path.expanduser("~/.kaggle")
+    os.makedirs(kaggle_path, exist_ok=True)
+    
+    with open(os.path.join(kaggle_path, "kaggle.json"), "w") as f:
+        json.dump(config, f)
+    
+    # 3. Set strict file permissions (Kaggle API requirement)
+    os.chmod(os.path.join(kaggle_path, "kaggle.json"), 0o600)
+
+    # 4. Install and Run Download
+    os.system("pip install -q kaggle")
+    
+    # The slug comes from the URL: xusaiai/cifar-10-pythontargz
+    dataset_slug = "xusaiai/cifar-10-pythontargz"
+    download_dir = "./data" # Change this to match your main script's data_root
+    
+    print(f"Downloading {dataset_slug}...")
+    os.system(f"kaggle datasets download -d {dataset_slug} -p {download_dir} --unzip")
+    print(f"Extraction complete. Check the '{download_dir}' folder.")
+
+if __name__ == "__main__":
+    setup_and_download()
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():
@@ -25,14 +55,34 @@ def main():
         description="TMR simulator for neural networks"
     )
 
-    parser.add_argument("--task", choices=["mnist", "cifar10", "cifar100"], default="mnist")
-    parser.add_argument("--model", choices=["mlp", "cnn"], default="mlp")
+    parser.add_argument("--task", choices=["cifar10", "cifar100"], default="cifar10")
+    parser.add_argument("--model", choices=["cnn"], default="cnn")
     parser.add_argument("-c", "--noisecfg", required=True)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--learning_rate", type=float, default=1e-3)
     parser.add_argument("--epochs", type=int, default=5)
- 
+
     args = parser.parse_args()
+    
+    if args.task ==  "cifar10":
+        class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    else: # cifar100
+        class_names = [
+    'apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 
+    'bicycle', 'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel', 
+    'can', 'castle', 'caterpillar', 'cattle', 'chair', 'chimpanzee', 'clock', 
+    'cloud', 'cockroach', 'couch', 'crab', 'crocodile', 'cup', 'dinosaur', 
+    'dolphin', 'elephant', 'flatfish', 'forest', 'fox', 'girl', 'hamster', 
+    'house', 'kangaroo', 'keyboard', 'lamp', 'laptop', 'leopard', 'lion', 
+    'lizard', 'lobster', 'man', 'maple_tree', 'motorcycle', 'mountain', 'mouse', 
+    'mushroom', 'oak_tree', 'orange', 'orchid', 'otter', 'palm_tree', 'pear', 
+    'pickup_truck', 'pine_tree', 'plain', 'plate', 'poppy', 'porcupine', 
+    'possum', 'rabbit', 'raccoon', 'ray', 'road', 'rocket', 'rose', 
+    'sea', 'seal', 'shark', 'shrew', 'skunk', 'skyscraper', 'snail', 'snake', 
+    'spider', 'squirrel', 'streetcar', 'sunflower', 'sweet_pepper', 'table', 
+    'tank', 'telephone', 'television', 'tiger', 'tractor', 'train', 'trout', 
+    'tulip', 'turtle', 'wardrobe', 'whale', 'willow_tree', 'wolf', 'woman', 'worm' ]
+ 
     with open(args.noisecfg, "r") as f:
         cfg = json.load(f)
 
@@ -51,22 +101,21 @@ def main():
         raise err
 
     device = get_device()
-    model_map = {"mlp": MLP, "cnn": ConvNeuralNet}
-    model = model_map[args.model]().to(device)
+    model_map = {"cnn": cnn.ConvNeuralNet}
+    num_classes = len(class_names)
+    model = model_map[args.model](num_classes=num_classes).to(device)
 
     train_loader, test_loader = data.get_dataloaders(args.task, train_batch_size=args.batch_size, test_batch_size=args.batch_size)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    if args.task in {"cifar10", "cifar100"}:
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, momentum=0.9, weight_decay=5e-4)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay = 0.005, momentum = 0.9)
    
     criterion = nn.CrossEntropyLoss(ignore_index=-1)
 
     if cfg["noise_training"]:
         # add noise but not one time noise
-        model = clone_with_noisy_layers(model, one_time_noise_sd=0.0, layer_noise_sd=config.noise_sd1, add_one_time_noise=config.add_one_time_noise, add_quantization=config.add_quantization, quantize_fn=config.quantize_fn, include_name_contains=config.include_name_contains, exclude_name_contains=config.exclude_name_contains)
+        model = clone_with_noisy_layers(model, one_time_noise_sd=0.0, layer_noise_sd=config.noise_sd, add_one_time_noise=config.add_one_time_noise, add_quantization=config.add_quantization, quantize_fn=config.quantize_fn, include_name_contains=config.include_name_contains, exclude_name_contains=config.exclude_name_contains)
     
-    # model.train()
-    # print("Starting training...")
+    model.train()
+    print("Starting training...")
 
     for epoch in range(args.epochs):
         for inputs, labels in train_loader:
@@ -75,10 +124,13 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+    train_dataset = train_loader.dataset
+    test_dataset = test_loader.dataset
     
-        # print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, args.epochs, loss.item()))
+    cnn.cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_names)
     
-    # print("Finished training, now running with TMR...")
+    print("Finished training, now running with TMR...")
     results = run_with_tmr(model, test_loader, device, config)
 
     print(f"TMR Accuracy: {results["tmr_accuracy"]:.4f}")

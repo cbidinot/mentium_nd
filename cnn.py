@@ -5,6 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
+from IPython.display import display, Image
 
 # For Visualizations
 def plot_value_array(i, predictions_array, true_label):
@@ -25,7 +26,10 @@ def plot_image(i, predictions_array, true_label, img, class_names):
   plt.xticks([])
   plt.yticks([])
 
-  plt.imshow(img, cmap=plt.cm.binary)
+  img_to_show = np.transpose(img, (1, 2, 0))
+  img_to_show = np.clip(img_to_show, 0, 1)
+  
+  plt.imshow(img_to_show, cmap=plt.cm.binary)
 
   predicted_label = np.argmax(predictions_array)
   if predicted_label == true_label:
@@ -80,74 +84,7 @@ class ConvNeuralNet(nn.Module):
             out = self.fc2(out)
             return out
   
-def cnn(device):
-    # Define relevant variables (called hyperparameters) for the ML task
-    batch_size = 64
-    num_classes = 10
-    learning_rate = 0.001
-    num_epochs = 50
-
-    # Use transforms.compose method to reformat images for modeling,
-    # and save to variable all_transforms for later use
-    all_transforms = transforms.Compose([transforms.Resize((32,32)),
-                                        transforms.ToTensor(),
-                                        transforms.Normalize(mean=[0.4914, 0.4822, 0.4465],
-                                                            std=[0.2023, 0.1994, 0.2010])
-                                        ])
-    # Create Training dataset
-    train_dataset = torchvision.datasets.CIFAR10(root = './data',
-                                                train = True,
-                                                transform = all_transforms,
-                                                download = True)
-
-    # Create Testing dataset
-    test_dataset = torchvision.datasets.CIFAR10(root = './data',
-                                                train = False,
-                                                transform = all_transforms,
-                                                download=True)
-
-    # Instantiate loader objects to facilitate processing
-    train_loader = torch.utils.data.DataLoader(dataset = train_dataset,
-                                            batch_size = batch_size,
-                                            shuffle = True)
-
-
-    test_loader = torch.utils.data.DataLoader(dataset = test_dataset,
-                                            batch_size = batch_size,
-                                            shuffle = True)
-
-    
-    model = ConvNeuralNet(num_classes)
-    model.to(device)
-
-    # Set Loss function with criterion
-    criterion = nn.CrossEntropyLoss()
-
-    # Set optimizer with optimizer
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay = 0.005, momentum = 0.9)
-
-    total_step = len(train_loader)
-
-    # We use the pre-defined number of epochs to determine how many iterations to train the network on
-    for epoch in range(num_epochs):
-    # Load in the data in batches using the train_loader object
-        for i, (images, labels) in enumerate(train_loader):
-            # Move tensors to the configured device
-            images = images.to(device)
-            labels = labels.to(device)
-
-            # Forward pass
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-
-            # Backward and optimize
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        # Run on validation
-
-        print('Epoch [{}/{}], Loss: {:.4f}'.format(epoch+1, num_epochs, loss.item()))
+def cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_names):
 
     from tqdm import tqdm
     with torch.no_grad():
@@ -161,14 +98,10 @@ def cnn(device):
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-        print('Accuracy of the network on the {} test images: {} %'.format(50000, 100 * correct / total))
-
     # Visualizations
     # The code shown below is taken from TensorFlow.
     # The original code utilized TensorFlow, and our team converted this to be compatible with PyTorch
     # Output figure without noise, and figure with noise for comparison
-
-    class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
     # Testing Dataset
     image, label = test_dataset[0]
@@ -176,6 +109,7 @@ def cnn(device):
 
     model.eval()
     with torch.no_grad():
+        image = image.to(device)
         logits = model(image) # pass test data
         prediction = torch.argmax(logits, dim=1)
 
@@ -184,10 +118,14 @@ def cnn(device):
 
     plt.figure(figsize=(6,3))
     plt.subplot(1,2,1)
-    plot_image(image, prediction, test_dataset, class_names)
+    plot_image(0, logits.cpu().numpy(), [label], image.cpu().numpy(), class_names)
+  
     plt.subplot(1,2,2)
-    plot_value_array(image, prediction,  test_dataset)
-    plt.show()
+    plot_value_array(0, logits.cpu().numpy()[0],  [label])
+    plt.tight_layout()
+    plt.savefig('test_prediction.png') # Save to file
+    plt.close() # Close to free memory
+    display(Image('test_prediction.png'))
 
     # Training Dataset
     image, label = train_dataset[0]
@@ -195,7 +133,8 @@ def cnn(device):
 
     model.eval()
     with torch.no_grad():
-        logits = model(image) # pass test data
+        image = image.to(device) 
+        logits = model(image)
         prediction = torch.argmax(logits, dim=1)
 
     print(f"Predicted Class ID: {prediction.item()}")
@@ -203,7 +142,11 @@ def cnn(device):
 
     plt.figure(figsize=(6,3))
     plt.subplot(1,2,1)
-    plot_image(image, prediction, train_dataset)
+    plot_image(0, logits.cpu().numpy(), [label], image.cpu().numpy(), class_names)
+  
     plt.subplot(1,2,2)
-    plot_value_array(image, prediction,  train_dataset)
-    plt.show()
+    plot_value_array(0, logits.cpu().numpy()[0], [label])
+    plt.tight_layout()
+    plt.savefig('train_prediction.png')
+    plt.close()
+    display(Image('train_prediction.png'))
