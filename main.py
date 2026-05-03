@@ -128,7 +128,7 @@ def main():
     train_dataset = train_loader.dataset
     test_dataset = test_loader.dataset
     
-    cnn.cnn(device, test_loader, model, test_dataset, train_dataset, class_names)
+    cnn.cnnmodel(device, test_loader, model, test_dataset, train_dataset, class_names)
     
     print("Finished training, now running with TMR...")
     results = run_with_tmr(model, test_loader, device, config)
