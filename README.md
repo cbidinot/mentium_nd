@@ -1,6 +1,25 @@
-# What's Included in this Repo:
+# MentiumND
 
-## noise_generator.py
+## Introduction
+This repository provides a python script to simulate triple modular redundancy (TMR) in a convolutional neural network with inserted noise. The script uses noise insertion functions from Mentium Technologies and provides various options to configure how the model will be trained and executed.
+
+## Options
+These are the different command line arguments supported by the program:
+| Argument | Short | Type | Default | Required | Description |
+|----------|-------|------|---------|----------|-------------|
+| `--task` | | `str` | `"mnist"` | No | Dataset/task to use (`mnist`, `cifar10`, `cifar100`) |
+| `--model` | | `str` | `"cnn"` | No | Model architecture (currently only supports `"cnn"`) |
+| `--noisecfg` | `-c` | `str` | — | **Yes** | Path to noise configuration JSON file |
+| `--batch_size` | | `int` | `32` | No | Number of samples per training batch |
+| `--learning_rate` | | `float` | `1e-3` | No | Optimizer learning rate |
+| `--epochs` | | `int` | `5` | No | Number of training epochs |
+
+To run with default settings, simply execute `main.py` as an executable using `defaultcfg.json`:
+```bash
+./main.py -c ./defaultcfg.json
+```
+## Contents
+### noise_generator.py
 
 Implements all noise and quantization functionality. Provides `NoisyLinear` and `NoisyConv2d` layer classes that wrap their standard PyTorch equivalents and inject Gaussian noise into weights during the forward pass. Also provides `clone_with_noisy_layers`, the main function used by `tmr.py` to create noisy model copies.  Takes in as arguments:
 
