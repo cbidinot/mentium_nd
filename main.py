@@ -125,6 +125,9 @@ def main():
             loss.backward()
             optimizer.step()
 
+    train_dataset = train_loader.dataset
+    test_dataset = test_loader.dataset
+    
     cnn(device, test_loader, model, test_dataset, train_dataset, class_names)
     
     print("Finished training, now running with TMR...")
