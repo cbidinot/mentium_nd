@@ -1,5 +1,7 @@
 # MentiumND
 
+https://github.com/cbidinot/mentium_nd/blob/main/README.md 
+
 ## Introduction
 
 This repository contains the code for a project partnering with Mentium Technologies using code from their `noise_setup` library.  This project entails injecting noise into a convolutional neural network, emulating real electrical noise that would occur in space due to radiation.  Using code from `tmr.py`, we implement a simulation of triple modular redundancy on the noisy models.  The code that simulates noise is within the program `noise_generator.py`.  The user is able to configure the noise generation in the provided `defaultcfg.json` file, with the attributes for noise configuration described below (see `noise_generator.py` under "Included Files").  There is additionally code for numerous quantization functions that can also be configured by the user.  The goal of this project is to see if and how well simulating TMR improves the performances of noisy models.  These results are shown via both console outputs displaying TMR data as well as visualizations written in the `cnn.py` file.
