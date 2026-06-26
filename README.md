@@ -10,7 +10,7 @@ This repository contains the code for a project partnering with Mentium Technolo
 These are the different command line arguments supported by the program:
 | Argument | Short | Type | Default | Required | Description |
 |----------|-------|------|---------|----------|-------------|
-| `--task` | | `str` | `"mnist"` | No | Dataset/task to use (`mnist`, `cifar10`, `cifar100`) |
+| `--task` | | `str` | `"mnist"` | No | Dataset/task to use (`mnist`, `cifar10`) |
 | `--model` | | `str` | `"cnn"` | No | Model architecture (currently only supports `"cnn"`) |
 | `--noisecfg` | `-c` | `str` | — | **Yes** | Path to noise configuration JSON file |
 | `--batch_size` | | `int` | `32` | No | Number of samples per training batch |
