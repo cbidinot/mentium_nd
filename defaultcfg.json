@@ -8,7 +8,7 @@
     "quantize_fn": "stochastic",
     "quantize_kwargs": {
         "num_bits": 8
-    }
+    },
     "include_name_contains": null,
     "exclude_name_contains": null
 }
