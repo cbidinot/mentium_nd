@@ -6,6 +6,7 @@
     "add_one_time_noise": false,
     "add_quantization": true,
     "quantize_fn": "symmetric",
+    "quantize_kwargs": null,
     "include_name_contains": null,
     "exclude_name_contains": null
 }
