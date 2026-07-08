@@ -1,14 +1,11 @@
 {
     "one_time_sd": 1e-2,
     "noise_sd": 1e-2,
-    "noise_inference": true,
+    "noise_inference": false,
     "noise_training": false,
     "add_one_time_noise": false,
     "add_quantization": true,
-    "quantize_fn": "stochastic",
-    "quantize_kwargs": {
-        "num_bits": 8
-    },
+    "quantize_fn": "symmetric",
     "include_name_contains": null,
     "exclude_name_contains": null
 }
