@@ -1,13 +1,14 @@
 {
     "one_time_sd": 1e-2,
-    "noise_sd": 5e-2,
-    "noise_inference": true,
+    "noise_sd": 1e-2,
+    "noise_inference": false,
     "noise_training": false,
     "add_one_time_noise": false,
     "add_quantization": true,
-    "quantize_fn": "stochastic",
+    "quantize_fn": "quantile",
     "quantize_kwargs": {
-        "num_bits": 5
+        "num_levels": 31,
+        "quantile": 0.15
     },
     "include_name_contains": null,
     "exclude_name_contains": null
